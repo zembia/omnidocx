@@ -60,11 +60,15 @@ module Omnidocx
 
       @document_zip.entries.each do |e|
         if e.name == RELATIONSHIP_FILE_PATH
-          in_stream = e.get_input_stream.read
+          input_stream = e.get_input_stream
+          next unless input_stream.respond_to?(:read)
+          in_stream = input_stream.read
           @rel_doc = Nokogiri::XML in_stream    #Relationships XML
         end
         if e.name == CONTENT_TYPES_FILE
-          in_stream = e.get_input_stream.read
+          input_stream = e.get_input_stream
+          next unless input_stream.respond_to?(:read)
+          in_stream = input_stream.read
           @cont_type_doc = Nokogiri::XML in_stream  #Content types XML to be updated later on with the additional media type info
         end
       end
@@ -75,7 +79,10 @@ module Omnidocx
           unless [DOCUMENT_FILE_PATH, RELATIONSHIP_FILE_PATH, CONTENT_TYPES_FILE].include?(e.name)
             #writing the files not needed to be edited back to the new zip
             zos.put_next_entry(e.name)
-            zos.print e.get_input_stream.read
+            input_stream = e.get_input_stream
+            next unless input_stream.respond_to?(:read)
+            in_stream = input_stream.read
+            zos.print in_stream
           end
         end
 
@@ -214,7 +221,9 @@ module Omnidocx
 
       # prepare initial set of data from first document
       @main_document_zip.entries.each do |zip_entrie|
-        in_stream = zip_entrie.get_input_stream.read
+        input_stream = zip_entrie.get_input_stream
+        next unless input_stream.respond_to?(:read)
+        in_stream = input_stream.read
 
         #Relationship XML
         @rel_doc = Nokogiri::XML(in_stream) if zip_entrie.name == RELATIONSHIP_FILE_PATH
@@ -243,14 +252,20 @@ module Omnidocx
 
           zip_file.entries.each do |e|
             if [HEADER_RELS_FILE_PATH, FOOTER_RELS_FILE_PATH].include?(e.name)
-              hf_xml = Nokogiri::XML(e.get_input_stream.read)
+              input_stream = e.get_input_stream
+              next unless input_stream.respond_to?(:read)
+              in_stream = input_stream.read
+              hf_xml = Nokogiri::XML(in_stream)
               hf_xml.css("Relationship").each do |rel_node|
                 #media file names in header & footer need not be changed as they will be picked from the first document only and not the subsequent documents, so no chance of duplication
                 head_foot_media["doc#{doc_cnt}"] << rel_node["Target"].gsub("media/", "")
               end
             end
             if e.name == CONTENT_TYPES_FILE
-              cont_type_xml = Nokogiri::XML(e.get_input_stream.read)
+              input_stream = e.get_input_stream
+              next unless input_stream.respond_to?(:read)
+              in_stream = input_stream.read
+              cont_type_xml = Nokogiri::XML(in_stream)
               default_nodes = cont_type_xml.css "Default"
               override_nodes = cont_type_xml.css "Override"
 
@@ -285,12 +300,17 @@ module Omnidocx
                   cnt += 1
                 end
                 zos.put_next_entry(e_name)
-                zos.print e.get_input_stream.read
+                input_stream = e.get_input_stream
+                next unless input_stream.respond_to?(:read)
+                in_stream = input_stream.read
+                zos.print in_stream
               else
                 #writing the files not needed to be edited back to the new zip (only from the first document, so as to avoid duplication)
                 if doc_cnt == 0
                   zos.put_next_entry(e.name)
-                  zos.print e.get_input_stream.read
+                  input_stream = e.get_input_stream
+                  next unless input_stream.respond_to?(:read)
+                  zos.print input_stream.read
                 end
               end
             end
@@ -311,7 +331,10 @@ module Omnidocx
           zip_file.entries.each do |e|
             #updating the relationship ids with the new media file names in the relationships XML
             if e.name == RELATIONSHIP_FILE_PATH
-              rel_xml = doc_cnt == 0 ? @rel_doc : Nokogiri::XML(e.get_input_stream.read)
+              input_stream = e.get_input_stream
+              next unless input_stream.respond_to?(:read)
+              in_stream = input_stream.read
+              rel_xml = doc_cnt == 0 ? @rel_doc : Nokogiri::XML(in_stream)
 
               rel_xml.css("Relationship").each do |node|
                 next unless node.values.to_s.include?("image")
@@ -335,7 +358,10 @@ module Omnidocx
 
             #adding the table style information to the styles xml, if any tables present in the document being merged
             if e.name == STYLES_FILE_PATH
-              style_xml = doc_cnt == 0 ? @style_doc : Nokogiri::XML(e.get_input_stream.read)
+              input_stream = e.get_input_stream
+              next unless input_stream.respond_to?(:read)
+              in_stream = input_stream.read
+              style_xml = doc_cnt == 0 ? @style_doc : Nokogiri::XML(in_stream)
               table_nodes = style_xml.xpath('//w:style').select{ |n| n.attributes["type"].value == "table" }
               table_nodes = table_nodes.select{ |n| n.attributes["styleId"].value != "TableNormal" } if doc_cnt != 0
 
@@ -422,7 +448,10 @@ module Omnidocx
           unless e.name == DOCUMENT_FILE_PATH
             #writing the files not needed to be edited back to the new zip
             zos.put_next_entry(e.name)
-            zos.print e.get_input_stream.read
+            input_stream = e.get_input_stream
+            next unless input_stream.respond_to?(:read)
+            in_stream = input_stream.read
+            zos.print in_stream
           end
         end
 
@@ -441,7 +470,10 @@ module Omnidocx
       @header_content = ''
       @template_zip.entries.each do |e|
         if e.name == HEADER_FILE_PATH
-          @header_content = e.get_input_stream.read
+          input_stream = e.get_input_stream
+          next unless input_stream.respond_to?(:read)
+          in_stream = input_stream.read
+          @header_content = in_stream
         end
       end
 
@@ -457,7 +489,10 @@ module Omnidocx
           unless e.name == HEADER_FILE_PATH
             #writing the files not needed to be edited back to the new zip
             zos.put_next_entry(e.name)
-            zos.print e.get_input_stream.read
+            input_stream = e.get_input_stream
+            next unless input_stream.respond_to?(:read)
+            in_stream = input_stream.read
+            zos.print in_stream
           end
         end
 
@@ -476,7 +511,10 @@ module Omnidocx
       @footer_content = ''
       @template_zip.entries.each do |e|
         if e.name == FOOTER_FILE_PATH
-          @footer_content = e.get_input_stream.read
+          input_stream = e.get_input_stream
+          next unless input_stream.respond_to?(:read)
+          in_stream = input_stream.read
+          @footer_content = in_stream
         end
       end
 
@@ -492,7 +530,10 @@ module Omnidocx
           unless e.name == FOOTER_FILE_PATH
             #writing the files not needed to be edited back to the new zip
             zos.put_next_entry(e.name)
-            zos.print e.get_input_stream.read
+            input_stream = e.get_input_stream
+            next unless input_stream.respond_to?(:read)
+            in_stream = input_stream.read
+            zos.print in_stream
           end
         end
 
@@ -504,6 +545,5 @@ module Omnidocx
       #moving the temporary docx file to the final_path specified by the user
       FileUtils.mv(temp_file.path, final_path)
     end
-
   end
 end
