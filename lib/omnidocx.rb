@@ -149,7 +149,18 @@ module Omnidocx
             end
 
             #appending the drawing element to the document's body
-            @body.children.last.add_previous_sibling(@image_element_xml.xpath("//w:p").last.to_xml)
+            if img[:key].nil?
+              @body.children.last.add_previous_sibling(@image_element_xml.xpath("//w:p").last.to_xml)
+            else
+              # search all nodes with the content to be replaced
+              nodes_to_replace = @body.children.select do |node|
+                node.content.include?(img[:key])
+              end
+              # replace the content with the new image element
+              nodes_to_replace.each do |node|
+                node.replace(@image_element_xml.xpath("//w:p").last.to_xml)
+              end
+            end
 
             media_hash[cnt] = index
           end
