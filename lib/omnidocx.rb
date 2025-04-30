@@ -89,7 +89,7 @@ module Omnidocx
         end
 
         # information to handle multiple images per key
-        counter = images_to_write.group_by{|data| data[:key]}.transform_values{|val| { data: nil } }
+        counter = images_to_write.group_by{|data| data[:key]}.transform_values{|val| { total: val.size, data: nil } }
 
         images_to_write.each_with_index do |img, index|
           data = ''
@@ -161,7 +161,9 @@ module Omnidocx
               nodes_to_replace = @body.children.select { |node| node.content.include?(img[:key]) }
 
               # calculate information for replace or add multi images per key
-              counter[img[:key]][:data] ||= nodes_to_replace.map{ |node| [node.__id__ , {size: 2, inserted: 0}] }.to_h
+              counter[img[:key]][:data] ||= nodes_to_replace.map do |node|
+                                              [node.__id__ , {size: counter[img[:key]][:total], inserted: 0}]
+                                            end.to_h
               # replace the content with the new image element
               nodes_to_replace.each do |node|
                 counter[img[:key]][:data][node.__id__][:inserted] += 1
