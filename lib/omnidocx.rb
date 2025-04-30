@@ -4,6 +4,8 @@ require 'zip'
 require 'tempfile'
 require 'mime/types'
 require 'open-uri'
+require "debug" if ENV["REQ_DEBUG"] == "true"
+
 
 
 module Omnidocx
@@ -86,6 +88,9 @@ module Omnidocx
           end
         end
 
+        # information to handle multiple images per key
+        counter = images_to_write.group_by{|data| data[:key]}.transform_values{|val| { data: nil } }
+
         images_to_write.each_with_index do |img, index|
           data = ''
 
@@ -153,12 +158,20 @@ module Omnidocx
               @body.children.last.add_previous_sibling(@image_element_xml.xpath("//w:p").last.to_xml)
             else
               # search all nodes with the content to be replaced
-              nodes_to_replace = @body.children.select do |node|
-                node.content.include?(img[:key])
-              end
+              nodes_to_replace = @body.children.select { |node| node.content.include?(img[:key]) }
+
+              # calculate information for replace or add multi images per key
+              counter[img[:key]][:data] ||= nodes_to_replace.map{ |node| [node.__id__ , {size: 2, inserted: 0}] }.to_h
               # replace the content with the new image element
               nodes_to_replace.each do |node|
-                node.replace(@image_element_xml.xpath("//w:p").last.to_xml)
+                counter[img[:key]][:data][node.__id__][:inserted] += 1
+
+                # insert image prev to key if it is not the last image
+                if counter[img[:key]][:data][node.__id__][:inserted] < counter[img[:key]][:data][node.__id__][:size]
+                  node.add_previous_sibling(@image_element_xml.xpath("//w:p").last.to_xml)
+                else
+                  node.replace(@image_element_xml.xpath("//w:p").last.to_xml)
+                end
               end
             end
 
