@@ -372,7 +372,8 @@ module Omnidocx
               next unless input_stream.respond_to?(:read)
               in_stream = input_stream.read
               style_xml = doc_cnt == 0 ? @style_doc : Nokogiri::XML(in_stream)
-              table_nodes = style_xml.xpath('//w:style').select{ |n| n.attributes["type"].value == "table" }
+              #table styles without id (like the default one LibreOffice adds) can't be referenced by a table, so they're skipped
+              table_nodes = style_xml.xpath('//w:style').select{ |n| n.attributes["type"]&.value == "table" && n.attributes["styleId"] }
               table_nodes = table_nodes.select{ |n| n.attributes["styleId"].value != "TableNormal" } if doc_cnt != 0
 
               table_nodes.each do |table_node|

@@ -8,7 +8,8 @@ module DocxHelper
   R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
   # directories: adds directory entries like "word/", as some word processors do
-  def build_docx(path, paragraphs: [], header: nil, footer: nil, directories: false)
+  # styles: extra <w:style> elements for styles.xml
+  def build_docx(path, paragraphs: [], header: nil, footer: nil, directories: false, styles: "")
     Zip::OutputStream.open(path) do |zos|
       %w[_rels/ word/ word/_rels/].each { |dir| zos.put_next_entry(dir) } if directories
 
@@ -25,7 +26,7 @@ module DocxHelper
       zos.print document_xml(paragraphs, header: header, footer: footer)
 
       zos.put_next_entry("word/styles.xml")
-      zos.print styles_xml
+      zos.print styles_xml(styles)
 
       if header
         zos.put_next_entry("word/header1.xml")
@@ -122,10 +123,10 @@ module DocxHelper
     XML
   end
 
-  def styles_xml
+  def styles_xml(extra)
     <<~XML
       <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-      <w:styles xmlns:w="#{W_NS}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>
+      <w:styles xmlns:w="#{W_NS}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>#{extra}</w:styles>
     XML
   end
 end

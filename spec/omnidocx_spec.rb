@@ -272,6 +272,18 @@ RSpec.describe Omnidocx::Docx do
     let(:doc1) { build_docx(tmp_path("doc1.docx"), paragraphs: ["Primero"]) }
     let(:doc2) { build_docx(tmp_path("doc2.docx"), paragraphs: ["Segundo", "Tercero"]) }
 
+    it "merges documents with a table style without id, as LibreOffice creates them" do
+      style = %(<w:style w:type="table" w:default="1"><w:name w:val="Default Table"/></w:style>)
+      doc1 = build_docx(tmp_path("doc1.docx"), paragraphs: ["Primero"], styles: style)
+      doc2 = build_docx(tmp_path("doc2.docx"), paragraphs: ["Segundo"], styles: style)
+
+      described_class.merge_documents([doc1, doc2], output, false)
+
+      expect(paragraph_texts(output)).to eq(["Primero", "Segundo"])
+      styles = Nokogiri::XML(read_zip_entry(output, "word/styles.xml"))
+      expect(styles.xpath("//w:style[@w:type='table']", "w" => DocxHelper::W_NS).size).to eq(1)
+    end
+
     it "requires at least two documents" do
       expect(described_class.merge_documents([doc1], output, false)).to eq("Pass atleast two documents to be merged")
       expect(File).not_to exist(output)
