@@ -3,7 +3,6 @@ require 'nokogiri'
 require 'zip'
 require 'tempfile'
 require 'mime/types'
-require 'open-uri'
 require "debug" if ENV["REQ_DEBUG"] == "true"
 
 
@@ -94,24 +93,18 @@ module Omnidocx
         images_to_write.each_with_index do |img, index|
           data = ''
 
-          #checking if image path is a url or a local path
-          uri = URI.parse(img[:path])
-          if %w( http https ).include?(uri.scheme)
-            data = Kernel.open(img[:path]).read rescue nil
-          else
-            File.open(img[:path], 'rb') do |f|
-              data = f.read rescue nil
-            end
+          #image path must be a local path
+          File.open(img[:path], 'rb') do |f|
+            data = f.read rescue nil
           end
 
           #if image path is readable
           if !data.empty?
-            img_url_no_params = img[:path].gsub(/\?.*/,'')
-            extension = File.extname(img_url_no_params).split(".").last
+            extension = File.extname(img[:path]).split(".").last
 
             if !media_content_type_hash.keys.include?(extension.split(".").last)
               #making an entry for a new media type
-              media_content_type_hash["#{extension}"] = MIME::Types.type_for(img_url_no_params)[0].to_s
+              media_content_type_hash["#{extension}"] = MIME::Types.type_for(img[:path])[0].to_s
             end
 
             zos.put_next_entry("word/media/image#{cnt}.#{extension}")

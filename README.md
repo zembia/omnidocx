@@ -47,15 +47,17 @@ $ Omnidocx::Docx.write_images_to_doc(images_to_write=[], input_document_path, ou
 
 # Below is an example of the images_to_write array that you can pass in for images to be written to the doc
 # image path, height and width are mandatory
+# image path must be a local file, URLs are not supported
 
     $ images_to_write = [ {
-                          :path => "tmp/image1.jpg",     #URL || local path
+                          :path => "tmp/image1.jpg",     #local path
                           :height => 500,
                           :width => 500,
                           :hdpi => 115,       #optional
                           :vdpi => 115        #optional
                           },
-                          :path => "https://xyz.com/abc.jpeg",    #URL || local path
+                          {
+                          :path => "tmp/image2.png",     #local path
                           :height => 800,
                           :width => 500,
                           :hdpi => 115,       #optional
@@ -88,7 +90,7 @@ $ replacement_hash = { "first_name" => "John", "last_name" => "Doe"}
 
 ```
 
-Will be adding test specs soon.
+Run the test suite with `bundle exec rake spec`. The specs tagged `render` open the generated documents with LibreOffice and are skipped when `soffice` and `poppler-utils` are not installed.
 
 ## Development
 
