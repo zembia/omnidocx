@@ -12,7 +12,10 @@ jobs:
       fail-fast: false
       matrix:
         ruby: ["3.2", "3.3", "3.4", "4.0"]
-    name: Ruby ${{ matrix.ruby }}
+        rubyzip: ["1", "2", "3"]
+    name: Ruby ${{ matrix.ruby }}, rubyzip ${{ matrix.rubyzip }}.x
+    env:
+      BUNDLE_GEMFILE: gemfiles/rubyzip_${{ matrix.rubyzip }}.gemfile
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
@@ -23,7 +26,13 @@ jobs:
 
   render:
     runs-on: ubuntu-latest
-    name: Render with LibreOffice
+    strategy:
+      fail-fast: false
+      matrix:
+        rubyzip: ["1", "2", "3"]
+    name: Render with LibreOffice, rubyzip ${{ matrix.rubyzip }}.x
+    env:
+      BUNDLE_GEMFILE: gemfiles/rubyzip_${{ matrix.rubyzip }}.gemfile
     steps:
       - uses: actions/checkout@v4
       - run: |

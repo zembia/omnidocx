@@ -25,7 +25,8 @@ module RenderHelper
     Rendered.new(
       text: run!("pdftotext", "-layout", pdf, "-").gsub(/[ \t]+/, " "),
       pages: run!("pdfinfo", pdf)[/^Pages:\s+(\d+)/, 1].to_i,
-      images: run!("pdfimages", "-list", pdf).lines.drop(2).size
+      # transparent images also list their alpha mask (smask), only count the images
+      images: run!("pdfimages", "-list", pdf).lines.drop(2).count { |line| line.split[2] == "image" }
     )
   end
 

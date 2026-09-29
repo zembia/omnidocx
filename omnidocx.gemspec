@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'nokogiri', '~> 1.6'
   spec.add_dependency 'mime-types', "~> 3.6.2"
-  spec.add_runtime_dependency 'rubyzip', '~> 1.1', '>= 1.1.6'
+  spec.add_runtime_dependency 'rubyzip', '>= 1.3', '< 4'
   spec.add_development_dependency "bundler", ">= 2.0"
   spec.add_development_dependency "debug"
   spec.add_development_dependency "rake", ">= 13.0"

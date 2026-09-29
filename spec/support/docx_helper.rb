@@ -7,8 +7,11 @@ module DocxHelper
   W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
   R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
-  def build_docx(path, paragraphs: [], header: nil, footer: nil)
+  # directories: adds directory entries like "word/", as some word processors do
+  def build_docx(path, paragraphs: [], header: nil, footer: nil, directories: false)
     Zip::OutputStream.open(path) do |zos|
+      %w[_rels/ word/ word/_rels/].each { |dir| zos.put_next_entry(dir) } if directories
+
       zos.put_next_entry("[Content_Types].xml")
       zos.print content_types_xml(header: header, footer: footer)
 

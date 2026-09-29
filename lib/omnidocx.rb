@@ -79,11 +79,9 @@ module Omnidocx
         @document_zip.entries.each do |e|
           unless [DOCUMENT_FILE_PATH, RELATIONSHIP_FILE_PATH, CONTENT_TYPES_FILE].include?(e.name)
             #writing the files not needed to be edited back to the new zip
-            zos.put_next_entry(e.name)
             input_stream = e.get_input_stream
-            next unless input_stream.respond_to?(:read)
-            in_stream = input_stream.read
-            zos.print in_stream
+            #directories have nothing to read, they are written empty
+            write_entry(zos, e.name, input_stream.respond_to?(:read) ? input_stream.read : nil)
           end
         end
 
@@ -107,8 +105,7 @@ module Omnidocx
               media_content_type_hash["#{extension}"] = MIME::Types.type_for(img[:path])[0].to_s
             end
 
-            zos.put_next_entry("word/media/image#{cnt}.#{extension}")
-            zos.print data     #storing the image in the new zip
+            write_entry(zos, "word/media/image#{cnt}.#{extension}", data)
 
             new_rel_node = Nokogiri::XML::Node.new("Relationship", @rel_doc)
             new_rel_node["Id"] = "rid#{cnt}"
@@ -184,16 +181,13 @@ module Omnidocx
         end
 
         #writing the content types xml to the new zip
-        zos.put_next_entry CONTENT_TYPES_FILE
-        zos.print @cont_type_doc.to_xml
+        write_entry(zos, CONTENT_TYPES_FILE, @cont_type_doc.to_xml)
 
         #writing the relationships xml to the new zip
-        zos.put_next_entry RELATIONSHIP_FILE_PATH
-        zos.print @rel_doc.to_xml
+        write_entry(zos, RELATIONSHIP_FILE_PATH, @rel_doc.to_xml)
 
         #writing the updated document content xml to the new zip
-        zos.put_next_entry DOCUMENT_FILE_PATH
-        zos.print @document_xml.to_xml
+        write_entry(zos, DOCUMENT_FILE_PATH, @document_xml.to_xml)
       end
 
       #moving the temporary docx file to the final_path specified by the user
@@ -318,18 +312,15 @@ module Omnidocx
                   media_hash["doc#{doc_cnt}"][e.name.gsub("word/media/", "")] = cnt
                   cnt += 1
                 end
-                zos.put_next_entry(e_name)
                 input_stream = e.get_input_stream
-                next unless input_stream.respond_to?(:read)
-                in_stream = input_stream.read
-                zos.print in_stream
+                #directories have nothing to read, they are written empty
+                write_entry(zos, e_name, input_stream.respond_to?(:read) ? input_stream.read : nil)
               else
                 #writing the files not needed to be edited back to the new zip (only from the first document, so as to avoid duplication)
                 if doc_cnt == 0
-                  zos.put_next_entry(e.name)
                   input_stream = e.get_input_stream
-                  next unless input_stream.respond_to?(:read)
-                  zos.print input_stream.read
+                  #directories have nothing to read, they are written empty
+                  write_entry(zos, e.name, input_stream.respond_to?(:read) ? input_stream.read : nil)
                 end
               end
             end
@@ -426,24 +417,20 @@ module Omnidocx
         end
 
         #writing the updated styles XML to the new zip
-        zos.put_next_entry(STYLES_FILE_PATH)
-        zos.print @style_doc.to_xml
+        write_entry(zos, STYLES_FILE_PATH, @style_doc.to_xml)
 
         #writing the updated relationships XML to the new zip
-        zos.put_next_entry(RELATIONSHIP_FILE_PATH)
-        zos.print @rel_doc.to_xml
+        write_entry(zos, RELATIONSHIP_FILE_PATH, @rel_doc.to_xml)
 
-        zos.put_next_entry(CONTENT_TYPES_FILE)
         additional_cont_type_entries.each do |node|
           #adding addtional content type nodes to the content type XML
           @cont_type_doc.at("Types").add_child(node)
         end
         #writing the updated content types XML to the new zip
-        zos.print @cont_type_doc.to_xml
+        write_entry(zos, CONTENT_TYPES_FILE, @cont_type_doc.to_xml)
 
         #writing the updated document content XML to the new zip
-        zos.put_next_entry(DOCUMENT_FILE_PATH)
-        zos.print @main_document_xml.to_xml
+        write_entry(zos, DOCUMENT_FILE_PATH, @main_document_xml.to_xml)
       end
 
       #moving the temporary docx file to the final_path specified by the user
@@ -464,17 +451,14 @@ module Omnidocx
         @template_zip.entries.each do |e|
           unless e.name == DOCUMENT_FILE_PATH
             #writing the files not needed to be edited back to the new zip
-            zos.put_next_entry(e.name)
             input_stream = e.get_input_stream
-            next unless input_stream.respond_to?(:read)
-            in_stream = input_stream.read
-            zos.print in_stream
+            #directories have nothing to read, they are written empty
+            write_entry(zos, e.name, input_stream.respond_to?(:read) ? input_stream.read : nil)
           end
         end
 
         #writing the updated document content xml to the new zip
-        zos.put_next_entry DOCUMENT_FILE_PATH
-        zos.print @template_content
+        write_entry(zos, DOCUMENT_FILE_PATH, @template_content)
       end
 
       #moving the temporary docx file to the final_path specified by the user
@@ -503,17 +487,14 @@ module Omnidocx
         @template_zip.entries.each do |e|
           unless e.name == HEADER_FILE_PATH
             #writing the files not needed to be edited back to the new zip
-            zos.put_next_entry(e.name)
             input_stream = e.get_input_stream
-            next unless input_stream.respond_to?(:read)
-            in_stream = input_stream.read
-            zos.print in_stream
+            #directories have nothing to read, they are written empty
+            write_entry(zos, e.name, input_stream.respond_to?(:read) ? input_stream.read : nil)
           end
         end
 
         #writing the updated document content xml to the new zip
-        zos.put_next_entry HEADER_FILE_PATH
-        zos.print @header_content
+        write_entry(zos, HEADER_FILE_PATH, @header_content)
       end
 
       #moving the temporary docx file to the final_path specified by the user
@@ -542,17 +523,14 @@ module Omnidocx
         @template_zip.entries.each do |e|
           unless e.name == FOOTER_FILE_PATH
             #writing the files not needed to be edited back to the new zip
-            zos.put_next_entry(e.name)
             input_stream = e.get_input_stream
-            next unless input_stream.respond_to?(:read)
-            in_stream = input_stream.read
-            zos.print in_stream
+            #directories have nothing to read, they are written empty
+            write_entry(zos, e.name, input_stream.respond_to?(:read) ? input_stream.read : nil)
           end
         end
 
         #writing the updated document content xml to the new zip
-        zos.put_next_entry FOOTER_FILE_PATH
-        zos.print @footer_content
+        write_entry(zos, FOOTER_FILE_PATH, @footer_content)
       end
 
       #moving the temporary docx file to the final_path specified by the user
@@ -609,6 +587,16 @@ module Omnidocx
         first = false
       end
     end
-    private_class_method :replace_text, :replace_in_nodes
+
+    #writes an entry with its size known beforehand, otherwise rubyzip >= 3 adds a zip64 extra field
+    #to every entry and LibreOffice can't open the document
+    def self.write_entry(zos, name, data)
+      data = data.to_s
+      entry = Zip::Entry.new("", name)
+      entry.size = data.bytesize
+      zos.put_next_entry(entry)
+      zos.print data
+    end
+    private_class_method :replace_text, :replace_in_nodes, :write_entry
   end
 end

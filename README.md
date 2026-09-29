@@ -96,6 +96,8 @@ $ replacement_hash = { "first_name" => "John", "last_name" => "Doe"}
 
 Run the test suite with `bundle exec rake spec`. The specs tagged `render` open the generated documents with LibreOffice and are skipped when `soffice` and `poppler-utils` are not installed.
 
+The gem supports rubyzip 1.3 to 3.x. To run the specs against a specific major version use the gemfiles in `gemfiles/`, e.g. `BUNDLE_GEMFILE=gemfiles/rubyzip_2.gemfile bundle install && BUNDLE_GEMFILE=gemfiles/rubyzip_2.gemfile bundle exec rake spec`.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.

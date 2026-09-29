@@ -22,6 +22,31 @@ RSpec.describe Omnidocx::Docx do
     { path: image, width: width, height: height, key: key }.compact
   end
 
+  describe "with directory entries in the zip" do
+    let(:input) { build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"], directories: true) }
+
+    it "keeps them when replacing text" do
+      described_class.replace_doc_content({ "{{a}}" => "x" }, input, output)
+
+      expect(zip_entry_names(output)).to include("word/", "word/_rels/")
+      expect(paragraph_texts(output)).to eq(["x"])
+    end
+
+    it "keeps them when writing images" do
+      described_class.write_images_to_doc([image_hash(key: "{{a}}")], input, output)
+
+      expect(zip_entry_names(output)).to include("word/", "word/_rels/")
+      expect(drawings(output).size).to eq(1)
+    end
+
+    it "keeps them when merging" do
+      described_class.merge_documents([input, input], output, false)
+
+      expect(zip_entry_names(output)).to include("word/", "word/_rels/")
+      expect(paragraph_texts(output)).to eq(["{{a}}", "{{a}}"])
+    end
+  end
+
   describe ".replace_doc_content" do
     it "replaces the keys in the document body" do
       input = build_docx(tmp_path("in.docx"), paragraphs: ["Hola {{name}}", "Total: {{amount}}"])
