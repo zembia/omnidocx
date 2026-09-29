@@ -88,6 +88,10 @@ $ Omnidocx::Docx.replace_footer_content(replacement_hash={}, input_document_path
 # Below is an example of how replacement_hash can be constructed 
 $ replacement_hash = { "first_name" => "John", "last_name" => "Doe"}
 
+# Keys are searched in the text of each paragraph, so they are found even when Word splits them
+# in several runs (the value takes the format of the run where the key starts). A key can't span
+# two paragraphs. Use delimited keys like "{{first_name}}" so they don't match regular text.
+
 ```
 
 Run the test suite with `bundle exec rake spec`. The specs tagged `render` open the generated documents with LibreOffice and are skipped when `soffice` and `poppler-utils` are not installed.

@@ -46,12 +46,60 @@ RSpec.describe Omnidocx::Docx do
     end
 
     it "replaces keys split across runs" do
-      pending "the key is matched against the raw XML, so it isn't found when Word splits it in several runs"
       input = build_docx(tmp_path("in.docx"), paragraphs: [["Hola {{na", "me}}"]])
 
       described_class.replace_doc_content({ "{{name}}" => "Mundo" }, input, output)
 
       expect(paragraph_texts(output)).to eq(["Hola Mundo"])
+    end
+
+    it "keeps the text around a key split across several runs" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: [["Hola {", "{na", "me}} y ", "chao"]])
+
+      described_class.replace_doc_content({ "{{name}}" => "Mundo" }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["Hola Mundo y chao"])
+    end
+
+    it "replaces every occurrence of a key" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: [["{{a}} y {{", "a}}"], "{{a}}"])
+
+      described_class.replace_doc_content({ "{{a}}" => "x" }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["x y x", "x"])
+    end
+
+    it "doesn't loop when the value contains the key" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content({ "{{a}}" => "({{a}})" }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["({{a}})"])
+    end
+
+    it "doesn't match a key across paragraphs" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{na", "me}}"])
+
+      described_class.replace_doc_content({ "{{name}}" => "Mundo" }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["{{na", "me}}"])
+    end
+
+    it "escapes XML special characters in the values" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{company}}"])
+
+      described_class.replace_doc_content({ "{{company}}" => "Pérez & Cía. <Ltda>" }, input, output)
+
+      expect(Nokogiri::XML(read_zip_entry(output, "word/document.xml")).errors).to be_empty
+      expect(paragraph_texts(output)).to eq(["Pérez & Cía. <Ltda>"])
+    end
+
+    it "doesn't replace text inside the XML markup" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["texto"])
+
+      described_class.replace_doc_content({ "w:t" => "roto" }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["texto"])
     end
 
     it "copies the rest of the entries unchanged" do
@@ -73,6 +121,14 @@ RSpec.describe Omnidocx::Docx do
       expect(read_zip_entry(output, "word/header1.xml")).to include("Header OK")
       expect(paragraph_texts(output)).to eq(["{{key}}"])
     end
+
+    it "replaces keys split across runs" do
+      input = build_docx(tmp_path("in.docx"), header: ["Header {{k", "ey}}"])
+
+      described_class.replace_header_content({ "{{key}}" => "OK" }, input, output)
+
+      expect(read_zip_entry(output, "word/header1.xml")).to include("Header OK")
+    end
   end
 
   describe ".replace_footer_content" do
@@ -83,6 +139,14 @@ RSpec.describe Omnidocx::Docx do
 
       expect(read_zip_entry(output, "word/footer1.xml")).to include("Footer OK")
       expect(paragraph_texts(output)).to eq(["{{key}}"])
+    end
+
+    it "replaces keys split across runs" do
+      input = build_docx(tmp_path("in.docx"), footer: ["Footer {{k", "ey}}"])
+
+      described_class.replace_footer_content({ "{{key}}" => "OK" }, input, output)
+
+      expect(read_zip_entry(output, "word/footer1.xml")).to include("Footer OK")
     end
   end
 

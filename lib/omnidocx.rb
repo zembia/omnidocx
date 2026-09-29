@@ -455,9 +455,7 @@ module Omnidocx
       @template_content = @template_zip.read(DOCUMENT_FILE_PATH)
 
       #replacing the keys with values in the document content xml
-      replacement_hash.each do |key,value|
-        @template_content.force_encoding("UTF-8").gsub!(key,value)
-      end
+      @template_content = replace_text(@template_content, replacement_hash)
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -496,9 +494,7 @@ module Omnidocx
         end
       end
 
-      replacement_hash.each do |key,value|
-        @header_content.force_encoding("UTF-8").gsub!(key,value)
-      end
+      @header_content = replace_text(@header_content, replacement_hash) unless @header_content.empty?
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -537,9 +533,7 @@ module Omnidocx
         end
       end
 
-      replacement_hash.each do |key,value|
-        @footer_content.force_encoding("UTF-8").gsub!(key,value)
-      end
+      @footer_content = replace_text(@footer_content, replacement_hash) unless @footer_content.empty?
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -564,5 +558,57 @@ module Omnidocx
       #moving the temporary docx file to the final_path specified by the user
       FileUtils.mv(temp_file.path, final_path)
     end
+
+    #replaces the keys in the text of each paragraph, even when word splits a key in several runs
+    def self.replace_text(xml_content, replacement_hash)
+      xml = Nokogiri::XML(xml_content)
+
+      xml.xpath("//w:p", NAMESPACES).each do |paragraph|
+        #only the text nodes of this paragraph, not the ones of paragraphs nested in it (e.g. text boxes)
+        text_nodes = paragraph.xpath(".//w:t", NAMESPACES).select do |t|
+          t.ancestors.find { |a| a.name == "p" && a.namespace&.href == NAMESPACES[:w] } == paragraph
+        end
+        next if text_nodes.empty?
+
+        replacement_hash.each do |key, value|
+          key = key.to_s
+          value = value.to_s
+          next if key.empty?
+
+          from = 0
+          while (start = text_nodes.map(&:content).join.index(key, from))
+            replace_in_nodes(text_nodes, start, key.length, value)
+            #continue after the value so a value containing the key isn't replaced again
+            from = start + value.length
+          end
+        end
+      end
+
+      xml.to_xml
+    end
+
+    #replaces the characters [start, start + length) of the joined text of the nodes with the value,
+    #the value is written in the first node and the rest of the key is removed from the following ones
+    def self.replace_in_nodes(text_nodes, start, length, value)
+      finish = start + length
+      offset = 0
+      first = true
+
+      text_nodes.each do |node|
+        text = node.content
+        node_start = offset
+        node_end = offset + text.length
+        offset = node_end
+        next if node_end <= start || node_start >= finish
+
+        before = text[0...[start - node_start, 0].max]
+        after = text[[finish - node_start, text.length].min..] || ""
+        node.content = first ? before + value + after : before + after
+        #keeps leading and trailing spaces of the new text
+        node["xml:space"] = "preserve"
+        first = false
+      end
+    end
+    private_class_method :replace_text, :replace_in_nodes
   end
 end
