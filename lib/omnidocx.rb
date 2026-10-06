@@ -8,6 +8,19 @@ require "debug" if ENV["REQ_DEBUG"] == "true"
 
 
 module Omnidocx
+  #a String flagged as raw OpenXML, see Omnidocx.raw
+  class Raw < ::String
+    def raw?
+      true
+    end
+  end
+
+  #marks a replacement as raw OpenXML so it is written as markup instead of escaped text
+  #Omnidocx.raw("Hola</w:t></w:r></w:p><w:p><w:r><w:t>Mundo")
+  def self.raw(xml)
+    Raw.new(xml.to_s)
+  end
+
   class Docx
     DOCUMENT_FILE_PATH = 'word/document.xml'
     RELATIONSHIP_FILE_PATH = 'word/_rels/document.xml.rels'
@@ -19,6 +32,9 @@ module Omnidocx
     FOOTER_FILE_PATH = "word/footer1.xml"
 
     MEDIA_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+
+    #a complete tag of the WordprocessingML namespace, used to detect values holding raw OpenXML
+    OPENXML_TAG = %r{</?w:[A-Za-z][^<>]*>}
 
     EMUSPERINCH = 914400
     EMUSPERCM = 360000
@@ -438,12 +454,12 @@ module Omnidocx
       FileUtils.mv(temp_file.path, final_path)
     end
 
-    def self.replace_doc_content(replacement_hash={}, template_path, final_path)
+    def self.replace_doc_content(replacement_hash={}, template_path, final_path, raw: false, escape: true)
       @template_zip = Zip::File.new(template_path)
       @template_content = @template_zip.read(DOCUMENT_FILE_PATH)
 
       #replacing the keys with values in the document content xml
-      @template_content = replace_text(@template_content, replacement_hash)
+      @template_content = replace_text(@template_content, replacement_hash, raw: raw || !escape)
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -466,7 +482,7 @@ module Omnidocx
       FileUtils.mv(temp_file.path, final_path)
     end
 
-    def self.replace_header_content(replacement_hash={}, template_path, final_path)
+    def self.replace_header_content(replacement_hash={}, template_path, final_path, raw: false, escape: true)
       @template_zip = Zip::File.new(template_path)
 
       @header_content = ''
@@ -479,7 +495,9 @@ module Omnidocx
         end
       end
 
-      @header_content = replace_text(@header_content, replacement_hash) unless @header_content.empty?
+      unless @header_content.empty?
+        @header_content = replace_text(@header_content, replacement_hash, raw: raw || !escape)
+      end
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -502,7 +520,7 @@ module Omnidocx
       FileUtils.mv(temp_file.path, final_path)
     end
 
-    def self.replace_footer_content(replacement_hash={}, template_path, final_path)
+    def self.replace_footer_content(replacement_hash={}, template_path, final_path, raw: false, escape: true)
       @template_zip = Zip::File.new(template_path)
 
       @footer_content = ''
@@ -515,7 +533,9 @@ module Omnidocx
         end
       end
 
-      @footer_content = replace_text(@footer_content, replacement_hash) unless @footer_content.empty?
+      unless @footer_content.empty?
+        @footer_content = replace_text(@footer_content, replacement_hash, raw: raw || !escape)
+      end
 
       temp_file = Tempfile.new('docxedit-')
 
@@ -538,9 +558,13 @@ module Omnidocx
       FileUtils.mv(temp_file.path, final_path)
     end
 
-    #replaces the keys in the text of each paragraph, even when word splits a key in several runs
-    def self.replace_text(xml_content, replacement_hash)
+    #replaces the keys in the text of each paragraph, even when word splits a key in several runs.
+    #values holding OpenXML (or flagged as raw) are spliced in as markup, the rest is escaped as text
+    def self.replace_text(xml_content, replacement_hash, raw: false)
       xml = Nokogiri::XML(xml_content)
+      #node.content= always escapes markup, so raw values are parked behind a placeholder and
+      #written back once the document is serialized
+      raw_values = {}
 
       xml.xpath("//w:p", NAMESPACES).each do |paragraph|
         #only the text nodes of this paragraph, not the ones of paragraphs nested in it (e.g. text boxes)
@@ -551,23 +575,75 @@ module Omnidocx
 
         replacement_hash.each do |key, value|
           key = key.to_s
-          value = value.to_s
           next if key.empty?
+
+          value, is_raw = normalize_replacement(value, raw)
+          if is_raw
+            placeholder = "__OMNIDOCX_RAW_#{raw_values.size}__"
+            raw_values[placeholder] = value
+            value = placeholder
+          end
 
           from = 0
           while (start = text_nodes.map(&:content).join.index(key, from))
-            replace_in_nodes(text_nodes, start, key.length, value)
+            inserted = replace_in_nodes(text_nodes, start, key.length, value)
             #continue after the value so a value containing the key isn't replaced again
-            from = start + value.length
+            from = start + inserted.length
           end
         end
       end
 
-      xml.to_xml
+      document_xml = xml.to_xml
+      return document_xml if raw_values.empty?
+
+      spliced = document_xml
+      raw_values.each { |placeholder, value| spliced = spliced.gsub(placeholder) { value } }
+      return spliced if well_formed?(spliced)
+
+      #a fragment that would break the document is written as plain text instead
+      escaped = document_xml
+      raw_values.each { |placeholder, value| escaped = escaped.gsub(placeholder) { escape_text(value) } }
+      escaped
+    end
+
+    #returns the text to insert and whether it must be written as markup instead of escaped text
+    def self.normalize_replacement(value, force_raw)
+      raw = force_raw
+
+      if value.is_a?(Hash)
+        unless value.key?(:value) || value.key?("value")
+          raise ArgumentError, "a replacement must be a string or a hash like { value: 'x', raw: true }"
+        end
+
+        raw = !!value[:raw] if value.key?(:raw)
+        raw = !!value["raw"] if value.key?("raw")
+        raw = !value[:escape] if value.key?(:escape)
+        raw = !value["escape"] if value.key?("escape")
+        value = value.key?(:value) ? value[:value] : value["value"]
+      end
+
+      raw ||= value.is_a?(Raw)
+      raw ||= value.respond_to?(:html_safe?) && value.html_safe?
+
+      text = value.to_s
+      [text, raw || !!(text =~ OPENXML_TAG)]
+    end
+
+    #true when the string can be parsed as xml without recovering from errors
+    def self.well_formed?(document_xml)
+      Nokogiri::XML(document_xml) { |config| config.strict.nonet }
+      true
+    rescue Nokogiri::XML::SyntaxError
+      false
+    end
+
+    def self.escape_text(text)
+      text.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
     end
 
     #replaces the characters [start, start + length) of the joined text of the nodes with the value,
-    #the value is written in the first node and the rest of the key is removed from the following ones
+    #the value is written in the first node and the rest of the key is removed from the following ones,
+    #it returns the text written in the first node
     def self.replace_in_nodes(text_nodes, start, length, value)
       finish = start + length
       offset = 0
@@ -587,6 +663,8 @@ module Omnidocx
         node["xml:space"] = "preserve"
         first = false
       end
+
+      value
     end
 
     #writes an entry with its size known beforehand, otherwise rubyzip >= 3 adds a zip64 extra field
@@ -598,6 +676,7 @@ module Omnidocx
       zos.put_next_entry(entry)
       zos.print data
     end
-    private_class_method :replace_text, :replace_in_nodes, :write_entry
+    private_class_method :replace_text, :replace_in_nodes, :normalize_replacement,
+                         :well_formed?, :escape_text, :write_entry
   end
 end
