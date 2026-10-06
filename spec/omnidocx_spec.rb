@@ -119,6 +119,121 @@ RSpec.describe Omnidocx::Docx do
       expect(paragraph_texts(output)).to eq(["Pérez & Cía. <Ltda>"])
     end
 
+    it "keeps escaping plain text values that only hold an ampersand" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{area}}"])
+
+      described_class.replace_doc_content({ "{{area}}" => "Investigación & Desarrollo" }, input, output)
+
+      xml = read_zip_entry(output, "word/document.xml")
+      expect(xml).to include("Investigación &amp; Desarrollo")
+      expect(Nokogiri::XML(xml).errors).to be_empty
+      expect(paragraph_texts(output)).to eq(["Investigación & Desarrollo"])
+    end
+
+    it "writes an OpenXML value as markup instead of escaped text" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => "Hola</w:t></w:r></w:p><w:p><w:r><w:t>Mundo" }, input, output
+      )
+
+      xml = read_zip_entry(output, "word/document.xml")
+      expect(xml).not_to include("&lt;w:p&gt;")
+      expect(xml).not_to include("&lt;/w:t&gt;")
+      expect(xml).to include("</w:r></w:p><w:p><w:r>")
+      expect(Nokogiri::XML(xml).errors).to be_empty
+      expect(paragraph_texts(output)).to eq(["Hola", "Mundo"])
+    end
+
+    it "keeps the paragraph properties of an injected OpenXML fragment" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{list}}"])
+      value = "1. Ítem A</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val='Normal'/></w:pPr><w:r><w:t>2. Ítem B"
+
+      described_class.replace_doc_content({ "{{list}}" => value }, input, output)
+
+      expect(paragraph_texts(output)).to eq(["1. Ítem A", "2. Ítem B"])
+      styles = document_body(output).xpath("./w:p/w:pPr/w:pStyle", "w" => DocxHelper::W_NS)
+      expect(styles.size).to eq(1)
+    end
+
+    it "injects OpenXML when the key is split across runs" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: [["{{li", "st}}"]])
+
+      described_class.replace_doc_content(
+        { "{{list}}" => "Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos" }, input, output
+      )
+
+      expect(paragraph_texts(output)).to eq(["Uno", "Dos"])
+    end
+
+    it "injects OpenXML keeping the text around the key" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["Antes {{a}} Después"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => "Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos" }, input, output
+      )
+
+      expect(paragraph_texts(output)).to eq(["Antes Uno", "Dos Después"])
+    end
+
+    it "injects OpenXML on every occurrence of a key" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}} y {{a}}"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => "Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos" }, input, output
+      )
+
+      expect(paragraph_texts(output)).to eq(["Uno", "Dos y Uno", "Dos"])
+    end
+
+    it "treats a value wrapped with Omnidocx.raw as markup" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => Omnidocx.raw("Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos") }, input, output
+      )
+
+      expect(paragraph_texts(output)).to eq(["Uno", "Dos"])
+    end
+
+    it "treats a { value:, raw: true } entry as markup" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => { value: "Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos", raw: true } }, input, output
+      )
+
+      expect(paragraph_texts(output)).to eq(["Uno", "Dos"])
+    end
+
+    it "treats every value as markup when raw is passed to replace_doc_content" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content(
+        { "{{a}}" => "Uno</w:t></w:r></w:p><w:p><w:r><w:t>Dos" }, input, output, raw: true
+      )
+
+      expect(paragraph_texts(output)).to eq(["Uno", "Dos"])
+    end
+
+    it "falls back to escaped text when the fragment would break the document" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      described_class.replace_doc_content({ "{{a}}" => "</w:p>" }, input, output)
+
+      xml = read_zip_entry(output, "word/document.xml")
+      expect(xml).not_to include("__OMNIDOCX_RAW_")
+      expect(Nokogiri::XML(xml).errors).to be_empty
+      expect(paragraph_texts(output)).to eq(["</w:p>"])
+    end
+
+    it "rejects a replacement hash without a value" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{a}}"])
+
+      expect { described_class.replace_doc_content({ "{{a}}" => { raw: true } }, input, output) }
+        .to raise_error(ArgumentError, /must be a string or a hash/)
+    end
+
     it "doesn't replace text inside the XML markup" do
       input = build_docx(tmp_path("in.docx"), paragraphs: ["texto"])
 
@@ -154,6 +269,19 @@ RSpec.describe Omnidocx::Docx do
 
       expect(read_zip_entry(output, "word/header1.xml")).to include("Header OK")
     end
+
+    it "writes an OpenXML value as markup in the header" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{key}}"], header: "Header {{key}}")
+
+      described_class.replace_header_content(
+        { "{{key}}" => "A</w:t></w:r></w:p><w:p><w:r><w:t>B" }, input, output
+      )
+
+      xml = read_zip_entry(output, "word/header1.xml")
+      expect(xml).not_to include("&lt;w:p&gt;")
+      expect(xml.scan("<w:p>").size).to eq(2)
+      expect(read_zip_entry(output, "word/document.xml")).to include("{{key}}")
+    end
   end
 
   describe ".replace_footer_content" do
@@ -172,6 +300,18 @@ RSpec.describe Omnidocx::Docx do
       described_class.replace_footer_content({ "{{key}}" => "OK" }, input, output)
 
       expect(read_zip_entry(output, "word/footer1.xml")).to include("Footer OK")
+    end
+
+    it "writes the values as markup when escaping is turned off" do
+      input = build_docx(tmp_path("in.docx"), paragraphs: ["{{key}}"], footer: "Footer {{key}}")
+
+      described_class.replace_footer_content(
+        { "{{key}}" => "A</w:t></w:r></w:p><w:p><w:r><w:t>B" }, input, output, escape: false
+      )
+
+      xml = read_zip_entry(output, "word/footer1.xml")
+      expect(xml).not_to include("&lt;w:p&gt;")
+      expect(xml.scan("<w:p>").size).to eq(2)
     end
   end
 

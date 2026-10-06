@@ -94,6 +94,35 @@ $ replacement_hash = { "first_name" => "John", "last_name" => "Doe"}
 
 ```
 
+### Raw OpenXML values
+
+Values are escaped as plain text, so `&` in `"Investigación & Desarrollo"` becomes `&amp;`. When a
+value carries WordprocessingML markup it is detected and written as real markup instead, which
+allows a replacement to open new paragraphs:
+
+```ruby
+# renders two paragraphs, "1. Ítem A" and "2. Ítem B"
+$ Omnidocx::Docx.replace_doc_content(
+    { "{{list}}" => "1. Ítem A</w:t></w:r></w:p><w:p><w:r><w:t>2. Ítem B" },
+    input_document_path, output_document_path)
+```
+
+The detection is automatic for values holding `<w:...>`/`</w:...>` tags, and can also be forced:
+
+```ruby
+# wrapping the value
+$ { "{{list}}" => Omnidocx.raw("</w:t></w:r></w:p><w:p><w:r><w:t>Next paragraph") }
+
+# or per entry
+$ { "{{list}}" => { value: "...", raw: true } }   # escape: false works too
+
+# or for every value of the call
+$ Omnidocx::Docx.replace_doc_content(replacement_hash, input_path, output_path, raw: true)
+```
+
+A fragment that would leave the document malformed is written as escaped text instead, so a broken
+value never produces an unopenable file.
+
 Run the test suite with `bundle exec rake spec`. The specs tagged `render` open the generated documents with LibreOffice and are skipped when `soffice` and `poppler-utils` are not installed.
 
 The gem supports rubyzip 1.3 to 3.x. To run the specs against a specific major version use the gemfiles in `gemfiles/`, e.g. `BUNDLE_GEMFILE=gemfiles/rubyzip_2.gemfile bundle install && BUNDLE_GEMFILE=gemfiles/rubyzip_2.gemfile bundle exec rake spec`.

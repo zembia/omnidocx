@@ -56,6 +56,18 @@ RSpec.describe Omnidocx::Docx, :render do
       expect(rendered.pages).to eq(2)
       expect(rendered.text).to include("Hola {{name}}", "Segundo documento")
     end
+
+    it "shows an injected OpenXML fragment as separate paragraphs" do
+      described_class.replace_doc_content(
+        { "{{name}}" => "1. Ítem A</w:t></w:r></w:p><w:p><w:r><w:t>2. Ítem B" }, input, output
+      )
+
+      rendered = render_docx(output)
+
+      expect(rendered.text).to include("Hola 1. Ítem A", "2. Ítem B")
+      expect(rendered.text).not_to include("&lt;", "</w:t>")
+      expect(rendered.text).not_to include("{{name}}")
+    end
   end
 
   context "with documents created in a word processor" do
